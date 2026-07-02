@@ -338,29 +338,23 @@ target_level = 3;
 % CFD note:
 % Your previous full-field error was already low, but L3 percent error was huge.
 % So this sweep varies structure more aggressively than lambda alone.
+% Columns:
+% lambda1, lambda2, gamma,
+% top_input_modes_per_level, top_target_modes,
+% max_terms_per_equation, max_quadratic_base_terms
 param_grid = [
-    % Tight gamma around best structure: 5 inputs, 9 targets, 5 terms, quad 4
-    0.004 0.002 0.013   5 9   5 4
-    0.006 0.004 0.013   5 9   5 4
-    0.008 0.006 0.013   5 9   5 4
+    0.004 0.002 0.010   5 10   5 4
+    0.006 0.004 0.010   5 10   5 4
+    0.008 0.006 0.010   5 10   5 4
 
-    0.004 0.002 0.014   5 9   5 4
-    0.006 0.004 0.014   5 9   5 4
-    0.008 0.006 0.014   5 9   5 4
+    0.004 0.002 0.011   5 10   5 4
+    0.006 0.004 0.011   5 10   5 4
+    0.008 0.006 0.011   5 10   5 4
 
-    0.004 0.002 0.015   5 9   5 4
-    0.006 0.004 0.015   5 9   5 4
-    0.008 0.006 0.015   5 9   5 4
+    0.004 0.002 0.012   5 10   5 4
+    0.006 0.004 0.012   5 10   5 4
+    0.008 0.006 0.012   5 10   5 4
 
-    0.004 0.002 0.016   5 9   5 4
-    0.006 0.004 0.016   5 9   5 4
-    0.008 0.006 0.016   5 9   5 4
-
-    0.004 0.002 0.017   5 9   5 4
-    0.006 0.004 0.017   5 9   5 4
-    0.008 0.006 0.017   5 9   5 4
-
-    % Check whether 10 targets with fewer terms beats 9 targets
     0.004 0.002 0.013   5 10   5 4
     0.006 0.004 0.013   5 10   5 4
     0.008 0.006 0.013   5 10   5 4
@@ -369,33 +363,19 @@ param_grid = [
     0.006 0.004 0.014   5 10   5 4
     0.008 0.006 0.014   5 10   5 4
 
-    0.004 0.002 0.015   5 10   5 4
-    0.006 0.004 0.015   5 10   5 4
-    0.008 0.006 0.015   5 10   5 4
+    % Check 9 and 11 targets around same gamma
+    0.006 0.004 0.011   5 9   5 4
+    0.006 0.004 0.012   5 9   5 4
+    0.006 0.004 0.013   5 9   5 4
 
-    0.004 0.002 0.016   5 10   5 4
-    0.006 0.004 0.016   5 10   5 4
-    0.008 0.006 0.016   5 10   5 4
+    0.006 0.004 0.011   5 11   5 4
+    0.006 0.004 0.012   5 11   5 4
+    0.006 0.004 0.013   5 11   5 4
 
-    % Check if even fewer terms improves stability
-    0.006 0.004 0.013   5 9   4 4
-    0.006 0.004 0.014   5 9   4 4
-    0.006 0.004 0.015   5 9   4 4
-    0.006 0.004 0.016   5 9   4 4
-    0.006 0.004 0.017   5 9   4 4
-
-    0.006 0.004 0.013   5 10   4 4
-    0.006 0.004 0.014   5 10   4 4
-    0.006 0.004 0.015   5 10   4 4
-    0.006 0.004 0.016   5 10   4 4
-    0.006 0.004 0.017   5 10   4 4
-
-    % Sanity check: 8 targets with best complexity
-    0.006 0.004 0.013   5 8   5 4
-    0.006 0.004 0.014   5 8   5 4
-    0.006 0.004 0.015   5 8   5 4
-    0.006 0.004 0.016   5 8   5 4
-    0.006 0.004 0.017   5 8   5 4
+    % Check whether 6 terms helps target 10
+    0.006 0.004 0.011   5 10   6 4
+    0.006 0.004 0.012   5 10   6 4
+    0.006 0.004 0.013   5 10   6 4
 ];
 sweep_results = zeros(size(param_grid,1), 11);
 
@@ -691,10 +671,19 @@ function [w_second, labels_second, mode_labels, target_cols, mu_xobs, sigma_xobs
         end
 
         self_idx = find(strcmp(labels2, mode_labels{target_col}), 1);
+        %{
         if ~isempty(self_idx) && coef2(self_idx) > 0
             fprintf('Removing positive self-feedback for %s: %.4e -> 0\n', ...
                 mode_labels{target_col}, coef2(self_idx));
             coef2(self_idx) = 0;
+        end
+        %}
+        self_growth_cap = 0.02;
+
+        if ~isempty(self_idx) && coef2(self_idx) > self_growth_cap
+            fprintf('Capping positive self-feedback for %s: %.4e -> %.4e\n', ...
+                mode_labels{target_col}, coef2(self_idx), self_growth_cap);
+            coef2(self_idx) = self_growth_cap;
         end
 
         coef2 = prune_equation_terms(coef2, labels2, mode_labels{target_col}, ...
