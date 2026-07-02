@@ -260,25 +260,10 @@ test_start_idx = 311;
 test_end_idx   = 350;
 plot_start_idx = 100; 
 plot_end_idx   = m;
-num_plot_snaps = X_total_size;
-
-
-
-% Format: [Level, Bin (j), Mode_Index] (Use 0 as a wildcard for ALL)
-% Use 1,0,0 - 2,0,0 - 3,0,0 for full period-specific reconstruction
-target_coordinates = [
-    1, 0, 0;   
-    2, 0, 0; 
-    3, 0, 0;
-    4, 0, 0;
-];
 
 fprintf('\n===========================================================');
 fprintf('\n   AVAILABLE COORDINATES FOR FRAMES %d TO %d', plot_start_idx, plot_end_idx);
 fprintf('\n===========================================================\n');
-
-
-available_modes = cell(L,maxJ);
 
 for i = 1:L
     J = 2^(i-1);
@@ -292,7 +277,6 @@ for i = 1:L
         % Check if this bin overlaps with our visual playback window
         if t_start <= plot_end_idx && t_end >= plot_start_idx
             num_modes_available = size(list_modes{i, j}, 2);
-            available_modes{i,j} = list_modes{i,j};
             fprintf('● Level %d, Bin %d (Frames %d to %d)\n', i, j, t_start, t_end);
             fprintf('  └─ Available Mode Indices: [');
             for m_idx = 1:num_modes_available
@@ -442,7 +426,6 @@ end
 
 test_steps = test_end_idx - test_start_idx + 1;
 recreate_steps = test_steps;
-t_recreate = (0:test_steps-1)' * dt;
 
 % Build observed modal amplitudes over the test interval, using the same mode labels/order
 [xobs_test, tobs_test] = build_mrdmd_xobs_for_labels( ...
@@ -473,23 +456,6 @@ for kk = 1:length(target_cols)
     col = target_cols(kk);
     y_recreate_phys(:,kk) = y_recreate(:,kk) .* sigma_xobs(col) + mu_xobs(col);
 end
-
-
-xobs_target_phys = zeros(size(y_recreate_phys));
-
-for kk = 1:length(target_cols)
-    col = target_cols(kk);
-    xobs_target_phys(:,kk) = xobs_test(:,col) .* sigma_xobs(col) + mu_xobs(col);
-end
-
-figure;
-plot(t_recreate, xobs_target_phys, '--');
-hold on;
-plot(t_recreate, y_recreate_phys, '-');
-grid on;
-xlabel('Time inside selected bin');
-ylabel('Physical L3 modal amplitude');
-title('True vs WSINDy-Recreated Physical L3 Modal Amplitudes');
 
 disp('Max recreated physical modal amplitude:');
 disp(max(abs(y_recreate_phys),[],'all'));
@@ -540,30 +506,27 @@ fprintf('Mean L3 error: %.2f%%\n', mean(l3_recreate_error)*100);
 fprintf('Max L3 error: %.2f%%\n', max(l3_recreate_error)*100);
 
 
-%% ================= VIEW TRUE VS WSINDY L3 CONTRIBUTION =================
+%% ================= PLOT MENU =================
+% Toggle these to keep figures manageable while testing different modes.
+show_l3_animation = false;
+show_full_animation = true;
+show_grouped_mode_animation = true;
+grouped_mode_field = 'speed'; % use 'u', 'v', or 'speed'
 
-figure('Position',[100 100 1500 500]);
-l3_clim = cfd_speed_clim_pair(X_l3_true, X_l3_wsindy, npoints);
-l3_err_clim = cfd_speed_error_clim(X_l3_true, X_l3_wsindy, npoints);
+% Each cell is one plotted/animated contribution made by summing modes.
+% Format inside each cell: [Level, Bin, Mode]
+mode_groups = {
+    [1 1 1; 1 1 2],          'L1 slow/global envelope';
+    [1 1 7],                 'L1 global modulation mode';
+    [2 2 8],                 'L2 primary mid-scale forcing';
+    [2 2 11; 2 2 12],        'L2 nonlinear gating pair';
+    [3 4 6; 3 4 7; 3 4 8; 3 4 9],  'L3 local wake-response packet';
+    [3 4 14; 3 4 15],        'L3 response pair 14/15';
+};
 
-for k = 1:recreate_steps
-
-    absolute_frame = test_start_idx + k - 1;
-
-    ax1 = subplot(1,3,1);
-    cfd_plot_state_speed(ax1, X_l3_true(:,k), x, y, npoints, l3_clim, ...
-        sprintf('True L3 Speed, Frame %d', absolute_frame));
-
-    ax2 = subplot(1,3,2);
-    cfd_plot_state_speed(ax2, X_l3_wsindy(:,k), x, y, npoints, l3_clim, ...
-        sprintf('One-Step WSINDy L3 Speed, Frame %d', absolute_frame));
-
-    ax3 = subplot(1,3,3);
-    l3_speed_err_frame = cfd_speed_error(X_l3_true(:,k), X_l3_wsindy(:,k), npoints);
-    cfd_plot_scalar_field(ax3, x, y, l3_speed_err_frame, l3_err_clim, ...
-        sprintf('L3 Speed Error, Frame %d', absolute_frame));
-
-    drawnow;
+if show_l3_animation
+    plot_l3_wsindy_comparison(X_l3_true, X_l3_wsindy, x, y, npoints, ...
+        test_start_idx, recreate_steps);
 end
 
 %% ================= FULL INSIDE-BIN CFD RECREATION =================
@@ -630,11 +593,59 @@ xlabel('Snapshot');
 ylabel('Full Inside-Bin Recreation Error %');
 title('Full Inside-Bin CFD Recreation Error Using WSINDy L3');
 
-figure('Position',[100 100 1200 500]);
+if show_full_animation
+    plot_full_wsindy_comparison(X_inside_true, X_inside_pred, x, y, npoints, ...
+        test_start_idx, recreate_steps);
+end
+
+if show_grouped_mode_animation
+    plot_cfd_mrdmd_group_animation(list_modes, list_w, list_b, list_t_start, list_bin_widths, ...
+        x, y, npoints, mode_groups, grouped_mode_field);
+end
+
+disp(max(abs(diff(y_recreate_phys)), [], 'all'))
+disp(max(abs(y_recreate_phys), [], 'all'))
+
+%% FUNCTIONS
+function plot_l3_wsindy_comparison(X_l3_true, X_l3_wsindy, x, y, npoints, ...
+    test_start_idx, recreate_steps)
+
+figure('Name', 'True vs WSINDy L3 Contribution', ...
+    'Position', [100 100 1500 500]);
+
+l3_clim = cfd_speed_clim_pair(X_l3_true, X_l3_wsindy, npoints);
+l3_err_clim = cfd_speed_error_clim(X_l3_true, X_l3_wsindy, npoints);
+
+for k = 1:recreate_steps
+    absolute_frame = test_start_idx + k - 1;
+
+    ax1 = subplot(1,3,1);
+    cfd_plot_state_speed(ax1, X_l3_true(:,k), x, y, npoints, l3_clim, ...
+        sprintf('True L3 Speed, Frame %d', absolute_frame));
+
+    ax2 = subplot(1,3,2);
+    cfd_plot_state_speed(ax2, X_l3_wsindy(:,k), x, y, npoints, l3_clim, ...
+        sprintf('One-Step WSINDy L3 Speed, Frame %d', absolute_frame));
+
+    ax3 = subplot(1,3,3);
+    l3_speed_err_frame = cfd_speed_error(X_l3_true(:,k), X_l3_wsindy(:,k), npoints);
+    cfd_plot_scalar_field(ax3, x, y, l3_speed_err_frame, l3_err_clim, ...
+        sprintf('L3 Speed Error, Frame %d', absolute_frame));
+
+    drawnow;
+end
+
+end
+
+function plot_full_wsindy_comparison(X_inside_true, X_inside_pred, x, y, npoints, ...
+    test_start_idx, recreate_steps)
+
+figure('Name', 'Full Inside-Bin CFD Reconstruction', ...
+    'Position', [100 100 1200 500]);
+
 full_clim = cfd_speed_clim_pair(X_inside_true, X_inside_pred, npoints);
 
 for k = 1:recreate_steps
-
     absolute_frame = test_start_idx + k - 1;
 
     ax1 = subplot(1,2,1);
@@ -648,10 +659,196 @@ for k = 1:recreate_steps
     drawnow;
 end
 
-disp(max(abs(diff(y_recreate_phys)), [], 'all'))
-disp(max(abs(y_recreate_phys), [], 'all'))
+end
 
-%% FUNCTIONS
+function plot_cfd_mrdmd_group_animation(list_modes, list_w, list_b, list_t_start, list_bin_widths, ...
+    x, y, npoints, mode_groups, field_type)
+
+if nargin < 10 || isempty(field_type)
+    field_type = 'u';
+end
+
+num_groups = size(mode_groups, 1);
+num_cols = 2;
+num_rows = ceil(num_groups / num_cols);
+
+group_frames = cell(num_groups, 1);
+valid_groups = false(num_groups, 1);
+max_steps = 0;
+
+for gg = 1:num_groups
+    specs = mode_groups{gg, 1};
+    frames = [];
+
+    for ii = 1:size(specs, 1)
+        lev = specs(ii, 1);
+        bin = specs(ii, 2);
+        mode_idx = specs(ii, 3);
+
+        if ~is_valid_mrdmd_mode(list_modes, list_w, lev, bin, mode_idx)
+            continue;
+        end
+
+        t_start = list_t_start(lev, bin);
+        bin_width = list_bin_widths(lev, bin);
+        t_end = t_start + bin_width - 1;
+        frames = union(frames, t_start:t_end);
+    end
+
+    if ~isempty(frames)
+        group_frames{gg} = frames;
+        valid_groups(gg) = true;
+        max_steps = max(max_steps, length(frames));
+    end
+end
+
+clim_by_group = cfd_group_animation_clim(list_modes, list_w, list_b, ...
+    list_t_start, list_bin_widths, npoints, mode_groups, field_type, group_frames, valid_groups);
+
+figure('Name', sprintf('Grouped mrDMD Mode Contributions: %s', field_type), ...
+    'Position', [100 100 1500 450*num_rows]);
+
+tiledlayout(num_rows, num_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+scatter_handles = gobjects(num_groups, 1);
+title_handles = gobjects(num_groups, 1);
+axis_handles = gobjects(num_groups, 1);
+
+for gg = 1:num_groups
+    ax = nexttile;
+    axis_handles(gg) = ax;
+
+    values = nan(npoints, 1);
+    if valid_groups(gg)
+        state = cfd_group_contribution_state(list_modes, list_w, list_b, ...
+            list_t_start, list_bin_widths, npoints, mode_groups{gg, 1}, group_frames{gg}(1));
+        values = cfd_state_field(state, npoints, field_type);
+    end
+
+    scatter_handles(gg) = scatter(ax, x, y, 12, values, 'filled');
+    axis(ax, 'equal');
+    axis(ax, 'tight');
+    xlabel(ax, 'x');
+    ylabel(ax, 'y');
+    colorbar(ax);
+    set(ax, 'CLim', clim_by_group(gg, :));
+    title_handles(gg) = title(ax, mode_groups{gg, 2});
+end
+
+for step = 1:max_steps
+    for gg = 1:num_groups
+        if ~valid_groups(gg)
+            set(scatter_handles(gg), 'CData', nan(npoints, 1));
+            set(title_handles(gg), 'String', sprintf('%s | missing', mode_groups{gg, 2}));
+            continue;
+        end
+
+        frames = group_frames{gg};
+        frame = frames(min(step, length(frames)));
+        state = cfd_group_contribution_state(list_modes, list_w, list_b, ...
+            list_t_start, list_bin_widths, npoints, mode_groups{gg, 1}, frame);
+        values = cfd_state_field(state, npoints, field_type);
+
+        set(scatter_handles(gg), 'CData', values);
+        set(axis_handles(gg), 'CLim', clim_by_group(gg, :));
+        set(title_handles(gg), 'String', sprintf('%s | Frame %d/%d-%d', ...
+            mode_groups{gg, 2}, frame, frames(1), frames(end)));
+    end
+
+    drawnow;
+end
+
+end
+
+function clim_by_group = cfd_group_animation_clim(list_modes, list_w, list_b, ...
+    list_t_start, list_bin_widths, npoints, mode_groups, field_type, group_frames, valid_groups)
+
+num_groups = size(mode_groups, 1);
+clim_by_group = repmat([-1 1], num_groups, 1);
+
+for gg = 1:num_groups
+    if ~valid_groups(gg)
+        continue;
+    end
+
+    max_abs_val = 0;
+    frames = group_frames{gg};
+
+    for kk = 1:length(frames)
+        state = cfd_group_contribution_state(list_modes, list_w, list_b, ...
+            list_t_start, list_bin_widths, npoints, mode_groups{gg, 1}, frames(kk));
+        values = cfd_state_field(state, npoints, field_type);
+        max_abs_val = max(max_abs_val, max(abs(values)));
+    end
+
+    if ~isfinite(max_abs_val) || max_abs_val <= 0
+        max_abs_val = 1;
+    end
+
+    if strcmpi(field_type, 'speed')
+        clim_by_group(gg, :) = [0 max_abs_val];
+    else
+        clim_by_group(gg, :) = [-max_abs_val max_abs_val];
+    end
+end
+
+end
+
+function state = cfd_group_contribution_state(list_modes, list_w, list_b, ...
+    list_t_start, list_bin_widths, npoints, mode_specs, frame)
+
+state = zeros(2*npoints, 1);
+
+for ii = 1:size(mode_specs, 1)
+    lev = mode_specs(ii, 1);
+    bin = mode_specs(ii, 2);
+    mode_idx = mode_specs(ii, 3);
+
+    if ~is_valid_mrdmd_mode(list_modes, list_w, lev, bin, mode_idx)
+        continue;
+    end
+
+    t_start = list_t_start(lev, bin);
+    bin_width = list_bin_widths(lev, bin);
+    t_end = t_start + bin_width - 1;
+
+    if frame < t_start || frame > t_end
+        continue;
+    end
+
+    rel_time = frame - t_start;
+    amp = list_b{lev, bin}(mode_idx) * list_w{lev, bin}(mode_idx)^rel_time;
+    state = state + real(list_modes{lev, bin}(:, mode_idx) * amp);
+end
+
+end
+
+function tf = is_valid_mrdmd_mode(list_modes, list_w, lev, bin, mode_idx)
+tf = lev <= size(list_modes, 1) && ...
+     bin <= size(list_modes, 2) && ...
+     ~isempty(list_modes{lev, bin}) && ...
+     mode_idx <= size(list_modes{lev, bin}, 2) && ...
+     mode_idx <= length(list_w{lev, bin});
+end
+
+function values = cfd_state_field(state, npoints, field_type)
+
+u = real(state(1:npoints));
+v = real(state(npoints+1:2*npoints));
+
+switch lower(field_type)
+    case 'u'
+        values = u;
+    case 'v'
+        values = v;
+    case 'speed'
+        values = sqrt(u.^2 + v.^2);
+    otherwise
+        error('field_type must be ''u'', ''v'', or ''speed''.');
+end
+
+end
+
 function cfd_plot_state_speed(ax, state, x, y, npoints, clim_vals, title_text)
     speed = cfd_speed_from_state(state, npoints);
     cfd_plot_scalar_field(ax, x, y, speed, clim_vals, title_text);
@@ -1152,3 +1349,5 @@ end
 
 tobs = (0:m_interval-1)' * dt;
 end
+
+
