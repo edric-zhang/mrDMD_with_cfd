@@ -314,7 +314,7 @@ tic;
 input_levels = [1 2];
 target_level = 3;
 top_input_modes_per_level = 5;
-top_target_modes = 9;
+top_target_modes = 10;
 
 [w_linear, w_second, labels_second, tags, xobs, tobs, mode_labels, target_cols, mu_xobs, sigma_xobs] = run_mrdmd_wsindy( ...
     list_w, list_b, list_modes, list_t_start, list_bin_widths, ...
@@ -1036,7 +1036,7 @@ function [w_linear, w_second, labels_second, tags, xobs, tobs, mode_labels, targ
 
     lambda1 = 0.006;
     lambda2 = 0.004;
-    gamma = 0.015;
+    gamma = 0.012;
     
     include_l3_peer_coupling = true;
     include_quadratic_terms = true;
@@ -1047,7 +1047,7 @@ function [w_linear, w_second, labels_second, tags, xobs, tobs, mode_labels, targ
     max_quadratic_base_terms = 4;
     
     relative_term_tol = 0.03;
-    max_terms_per_equation = 5;
+    max_terms_per_equation = 6;
     max_nonlinear_terms_per_equation = 4;
     alpha_loss = 0.8;
     overlap_frac_ag = 0.8;
@@ -1180,10 +1180,19 @@ function [w_linear, w_second, labels_second, tags, xobs, tobs, mode_labels, targ
         end
 
         self_idx = find(strcmp(labels2, mode_labels{target_col}), 1);
+        %{
         if ~isempty(self_idx) && coef2(self_idx) > 0
             fprintf('Removing positive self-feedback for %s: %.4e -> 0\n', ...
                 mode_labels{target_col}, coef2(self_idx));
             coef2(self_idx) = 0;
+        end
+        %}
+        self_growth_cap = 0.02;
+
+        if ~isempty(self_idx) && coef2(self_idx) > self_growth_cap
+            fprintf('Capping positive self-feedback for %s: %.4e -> %.4e\n', ...
+                mode_labels{target_col}, coef2(self_idx), self_growth_cap);
+            coef2(self_idx) = self_growth_cap;
         end
 
         coef2 = prune_equation_terms(coef2, labels2, mode_labels{target_col}, ...
