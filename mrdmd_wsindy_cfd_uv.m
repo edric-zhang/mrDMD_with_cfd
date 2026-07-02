@@ -208,22 +208,7 @@ for i = 1:L
 end
 X_rec = real(X_rec); 
 
-%{
-%% Quick display of what we got: 
-total_modes = 0;
-for i = 1:L
-    J = 2^(i-1);
-    for j = 1:J
-        if ~isempty(list_modes{i,j})
-            % The number of columns equals the number of modes in this bin
-            num_modes_in_bin = size(list_modes{i,j}, 2); 
-            total_modes = total_modes + num_modes_in_bin;
-            fprintf('Level %d, Bin %d has %d slow modes\n', i, j, num_modes_in_bin);
-        end
-    end
-end
-fprintf('--- Total modes across all time windows: %d ---\n', total_modes);
-%}
+
 
 %% Error Graph
 
@@ -506,28 +491,30 @@ fprintf('Mean L3 error: %.2f%%\n', mean(l3_recreate_error)*100);
 fprintf('Max L3 error: %.2f%%\n', max(l3_recreate_error)*100);
 
 
+
 %% ================= PLOT MENU =================
 % Toggle these to keep figures manageable while testing different modes.
 show_l3_animation = false;
-show_full_animation = true;
+show_full_animation = false;
 show_grouped_mode_animation = true;
-grouped_mode_field = 'speed'; % use 'u', 'v', or 'speed'
+grouped_mode_field = 'u'; % use 'u', 'v', or 'speed'
 
-% Each cell is one plotted/animated contribution made by summing modes.
-% Format inside each cell: [Level, Bin, Mode]
 mode_groups = {
-    [1 1 1; 1 1 2],          'L1 slow/global envelope';
-    [1 1 7],                 'L1 global modulation mode';
-    [2 2 8],                 'L2 primary mid-scale forcing';
-    [2 2 11; 2 2 12],        'L2 nonlinear gating pair';
-    [3 4 6; 3 4 7; 3 4 8; 3 4 9],  'L3 local wake-response packet';
-    [3 4 14; 3 4 15],        'L3 response pair 14/15';
+    %[1 1 1; 1 1 2],          'L1 slow/global envelope';
+    %[1 1 7],                 '1-1-7: Primary Von Kármán Vortex Street: SHREDDING';
+    [3 4 2],                  'u', '3-4-2: Medium-size, wavelike ripplings (u)'  
+    [2 2 11],                 'u', '2-2-11: Broad, elongated shape (u)'
+    [2 2 11],                 'v', '2-2-11: Broad, elongated shape (v)'
+    [3 4 2; 2 2 11],          'u', '3-4-2 & 2-2-11: Both: Shred --> Shear-Layer Transition (v)';           
+    %[2 2 12; 3 4 4],         '2-2-12 % 3-4-4:  (KH) Shear Layer Instabilities';
 };
 
 if show_l3_animation
     plot_l3_wsindy_comparison(X_l3_true, X_l3_wsindy, x, y, npoints, ...
         test_start_idx, recreate_steps);
 end
+
+
 
 %% ================= FULL INSIDE-BIN CFD RECREATION =================
 % Add the unchanged L1/L2 ancestor contributions inside the same bin,
@@ -600,260 +587,287 @@ end
 
 if show_grouped_mode_animation
     plot_cfd_mrdmd_group_animation(list_modes, list_w, list_b, list_t_start, list_bin_widths, ...
-        x, y, npoints, mode_groups, grouped_mode_field);
+        x, y, npoints, mode_groups);
 end
 
 disp(max(abs(diff(y_recreate_phys)), [], 'all'))
 disp(max(abs(y_recreate_phys), [], 'all'))
 
+
+
+
+
 %% FUNCTIONS
+
+%% PLOT L3 Comparison
 function plot_l3_wsindy_comparison(X_l3_true, X_l3_wsindy, x, y, npoints, ...
     test_start_idx, recreate_steps)
 
-figure('Name', 'True vs WSINDy L3 Contribution', ...
-    'Position', [100 100 1500 500]);
-
-l3_clim = cfd_speed_clim_pair(X_l3_true, X_l3_wsindy, npoints);
-l3_err_clim = cfd_speed_error_clim(X_l3_true, X_l3_wsindy, npoints);
-
-for k = 1:recreate_steps
-    absolute_frame = test_start_idx + k - 1;
-
-    ax1 = subplot(1,3,1);
-    cfd_plot_state_speed(ax1, X_l3_true(:,k), x, y, npoints, l3_clim, ...
-        sprintf('True L3 Speed, Frame %d', absolute_frame));
-
-    ax2 = subplot(1,3,2);
-    cfd_plot_state_speed(ax2, X_l3_wsindy(:,k), x, y, npoints, l3_clim, ...
-        sprintf('One-Step WSINDy L3 Speed, Frame %d', absolute_frame));
-
-    ax3 = subplot(1,3,3);
-    l3_speed_err_frame = cfd_speed_error(X_l3_true(:,k), X_l3_wsindy(:,k), npoints);
-    cfd_plot_scalar_field(ax3, x, y, l3_speed_err_frame, l3_err_clim, ...
-        sprintf('L3 Speed Error, Frame %d', absolute_frame));
-
-    drawnow;
+    figure('Name', 'True vs WSINDy L3 Contribution', ...
+        'Position', [100 100 1500 500]);
+    
+    l3_clim = cfd_speed_clim_pair(X_l3_true, X_l3_wsindy, npoints);
+    l3_err_clim = cfd_speed_error_clim(X_l3_true, X_l3_wsindy, npoints);
+    
+    for k = 1:recreate_steps
+        absolute_frame = test_start_idx + k - 1;
+    
+        ax1 = subplot(1,3,1);
+        cfd_plot_state_speed(ax1, X_l3_true(:,k), x, y, npoints, l3_clim, ...
+            sprintf('True L3 Speed, Frame %d', absolute_frame));
+    
+        ax2 = subplot(1,3,2);
+        cfd_plot_state_speed(ax2, X_l3_wsindy(:,k), x, y, npoints, l3_clim, ...
+            sprintf('One-Step WSINDy L3 Speed, Frame %d', absolute_frame));
+    
+        ax3 = subplot(1,3,3);
+        l3_speed_err_frame = cfd_speed_error(X_l3_true(:,k), X_l3_wsindy(:,k), npoints);
+        cfd_plot_scalar_field(ax3, x, y, l3_speed_err_frame, l3_err_clim, ...
+            sprintf('L3 Speed Error, Frame %d', absolute_frame));
+    
+        drawnow;
+    end
 end
 
-end
-
+%% PLOT FULL COMPARISON
 function plot_full_wsindy_comparison(X_inside_true, X_inside_pred, x, y, npoints, ...
     test_start_idx, recreate_steps)
 
-figure('Name', 'Full Inside-Bin CFD Reconstruction', ...
-    'Position', [100 100 1200 500]);
-
-full_clim = cfd_speed_clim_pair(X_inside_true, X_inside_pred, npoints);
-
-for k = 1:recreate_steps
-    absolute_frame = test_start_idx + k - 1;
-
-    ax1 = subplot(1,2,1);
-    cfd_plot_state_speed(ax1, X_inside_true(:,k), x, y, npoints, full_clim, ...
-        sprintf('Original Speed, Frame %d', absolute_frame));
-
-    ax2 = subplot(1,2,2);
-    cfd_plot_state_speed(ax2, X_inside_pred(:,k), x, y, npoints, full_clim, ...
-        sprintf('Inside-Bin WSINDy Speed, Frame %d', absolute_frame));
-
-    drawnow;
+    figure('Name', 'Full Inside-Bin CFD Reconstruction', ...
+        'Position', [100 100 1200 500]);
+    
+    full_clim = cfd_speed_clim_pair(X_inside_true, X_inside_pred, npoints);
+    
+    for k = 1:recreate_steps
+        absolute_frame = test_start_idx + k - 1;
+    
+        ax1 = subplot(1,2,1);
+        cfd_plot_state_speed(ax1, X_inside_true(:,k), x, y, npoints, full_clim, ...
+            sprintf('Original Speed, Frame %d', absolute_frame));
+    
+        ax2 = subplot(1,2,2);
+        cfd_plot_state_speed(ax2, X_inside_pred(:,k), x, y, npoints, full_clim, ...
+            sprintf('Inside-Bin WSINDy Speed, Frame %d', absolute_frame));
+    
+        drawnow;
+    end
 end
 
-end
 
+%% CHOSEN MODE ANIMATION
 function plot_cfd_mrdmd_group_animation(list_modes, list_w, list_b, list_t_start, list_bin_widths, ...
-    x, y, npoints, mode_groups, field_type)
+    x, y, npoints, mode_groups)
 
-if nargin < 10 || isempty(field_type)
-    field_type = 'u';
+    num_groups = size(mode_groups, 1);
+    num_cols = 2;
+    num_rows = ceil(num_groups / num_cols);
+
+    group_frames = cell(num_groups, 1);
+    valid_groups = false(num_groups, 1);
+    max_steps = 0;
+
+    for gg = 1:num_groups
+        specs = mode_groups{gg, 1};
+        frames = [];
+
+        for ii = 1:size(specs, 1)
+            lev = specs(ii, 1);
+            bin = specs(ii, 2);
+            mode_idx = specs(ii, 3);
+
+            if ~is_valid_mrdmd_mode(list_modes, list_w, lev, bin, mode_idx)
+                continue;
+            end
+
+            t_start = list_t_start(lev, bin);
+            bin_width = list_bin_widths(lev, bin);
+            t_end = t_start + bin_width - 1;
+            frames = union(frames, t_start:t_end);
+        end
+
+        if ~isempty(frames)
+            group_frames{gg} = frames;
+            valid_groups(gg) = true;
+            max_steps = max(max_steps, length(frames));
+        end
+    end
+
+    clim_by_group = cfd_group_animation_clim(list_modes, list_w, list_b, ...
+        list_t_start, list_bin_widths, npoints, mode_groups, group_frames, valid_groups);
+
+    figure('Name', 'Grouped mrDMD Mode Contributions', ...
+        'Position', [100 30 1500 450*num_rows]);
+
+    tiledlayout(num_rows, num_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+    scatter_handles = gobjects(num_groups, 1);
+    title_handles = gobjects(num_groups, 1);
+    axis_handles = gobjects(num_groups, 1);
+
+    for gg = 1:num_groups
+        ax = nexttile;
+        axis_handles(gg) = ax;
+
+        field_type = lower(mode_groups{gg, 2});
+        group_title = mode_groups{gg, 3};
+
+        values = nan(npoints, 1);
+        if valid_groups(gg)
+            state = cfd_group_contribution_state(list_modes, list_w, list_b, ...
+                list_t_start, list_bin_widths, npoints, mode_groups{gg, 1}, group_frames{gg}(1));
+            values = cfd_state_field(state, npoints, field_type);
+        end
+
+        scatter_handles(gg) = scatter(ax, x, y, 12, values, 'filled');
+        axis(ax, 'equal');
+        axis(ax, 'tight');
+        xlabel(ax, 'x');
+        ylabel(ax, 'y');
+        colorbar(ax);
+        set(ax, 'CLim', clim_by_group(gg, :));
+        title_handles(gg) = title(ax, sprintf('[%s] %s', field_type, group_title));
+    end
+
+    for step = 1:max_steps
+        for gg = 1:num_groups
+            field_type = lower(mode_groups{gg, 2});
+            group_title = mode_groups{gg, 3};
+
+            if ~valid_groups(gg)
+                set(scatter_handles(gg), 'CData', nan(npoints, 1));
+                set(title_handles(gg), 'String', sprintf('[%s] %s | missing', field_type, group_title));
+                continue;
+            end
+
+            frames = group_frames{gg};
+            frame = frames(min(step, length(frames)));
+
+            state = cfd_group_contribution_state(list_modes, list_w, list_b, ...
+                list_t_start, list_bin_widths, npoints, mode_groups{gg, 1}, frame);
+            values = cfd_state_field(state, npoints, field_type);
+
+            set(scatter_handles(gg), 'CData', values);
+            set(axis_handles(gg), 'CLim', clim_by_group(gg, :));
+            set(title_handles(gg), 'String', sprintf('[%s] %s | Frame %d/%d-%d', ...
+                field_type, group_title, frame, frames(1), frames(end)));
+        end
+
+        drawnow;
+    end
 end
 
-num_groups = size(mode_groups, 1);
-num_cols = 2;
-num_rows = ceil(num_groups / num_cols);
 
-group_frames = cell(num_groups, 1);
-valid_groups = false(num_groups, 1);
-max_steps = 0;
+%% COLOR LIMIT SCALAR
+% Computes the fixed color limits for each mode animation panel for better
+% understanding
 
-for gg = 1:num_groups
-    specs = mode_groups{gg, 1};
-    frames = [];
+function clim_by_group = cfd_group_animation_clim(list_modes, list_w, list_b, ...
+    list_t_start, list_bin_widths, npoints, mode_groups, group_frames, valid_groups)
 
-    for ii = 1:size(specs, 1)
-        lev = specs(ii, 1);
-        bin = specs(ii, 2);
-        mode_idx = specs(ii, 3);
+    num_groups = size(mode_groups, 1);
+    clim_by_group = repmat([-1 1], num_groups, 1);
 
+    for gg = 1:num_groups
+        if ~valid_groups(gg)
+            continue;
+        end
+
+        field_type = lower(mode_groups{gg, 2});
+        max_abs_val = 0;
+        frames = group_frames{gg};
+
+        for kk = 1:length(frames)
+            state = cfd_group_contribution_state(list_modes, list_w, list_b, ...
+                list_t_start, list_bin_widths, npoints, mode_groups{gg, 1}, frames(kk));
+            values = cfd_state_field(state, npoints, field_type);
+            max_abs_val = max(max_abs_val, max(abs(values)));
+        end
+
+        if ~isfinite(max_abs_val) || max_abs_val <= 0
+            max_abs_val = 1;
+        end
+
+        if strcmpi(field_type, 'speed')
+            clim_by_group(gg, :) = [0 max_abs_val];
+        else
+            clim_by_group(gg, :) = [-max_abs_val max_abs_val];
+        end
+    end
+end
+
+
+%% GROUP MODE ADDER
+% Building the time evolution of the chosen groups
+% Use Mode * b * lambda^time
+function state = cfd_group_contribution_state(list_modes, list_w, list_b, ...
+    list_t_start, list_bin_widths, npoints, mode_specs, frame)
+    
+    state = zeros(2*npoints, 1);
+    
+    for ii = 1:size(mode_specs, 1)
+        lev = mode_specs(ii, 1);
+        bin = mode_specs(ii, 2);
+        mode_idx = mode_specs(ii, 3);
+    
         if ~is_valid_mrdmd_mode(list_modes, list_w, lev, bin, mode_idx)
             continue;
         end
-
+    
         t_start = list_t_start(lev, bin);
         bin_width = list_bin_widths(lev, bin);
         t_end = t_start + bin_width - 1;
-        frames = union(frames, t_start:t_end);
-    end
-
-    if ~isempty(frames)
-        group_frames{gg} = frames;
-        valid_groups(gg) = true;
-        max_steps = max(max_steps, length(frames));
-    end
-end
-
-clim_by_group = cfd_group_animation_clim(list_modes, list_w, list_b, ...
-    list_t_start, list_bin_widths, npoints, mode_groups, field_type, group_frames, valid_groups);
-
-figure('Name', sprintf('Grouped mrDMD Mode Contributions: %s', field_type), ...
-    'Position', [100 100 1500 450*num_rows]);
-
-tiledlayout(num_rows, num_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
-
-scatter_handles = gobjects(num_groups, 1);
-title_handles = gobjects(num_groups, 1);
-axis_handles = gobjects(num_groups, 1);
-
-for gg = 1:num_groups
-    ax = nexttile;
-    axis_handles(gg) = ax;
-
-    values = nan(npoints, 1);
-    if valid_groups(gg)
-        state = cfd_group_contribution_state(list_modes, list_w, list_b, ...
-            list_t_start, list_bin_widths, npoints, mode_groups{gg, 1}, group_frames{gg}(1));
-        values = cfd_state_field(state, npoints, field_type);
-    end
-
-    scatter_handles(gg) = scatter(ax, x, y, 12, values, 'filled');
-    axis(ax, 'equal');
-    axis(ax, 'tight');
-    xlabel(ax, 'x');
-    ylabel(ax, 'y');
-    colorbar(ax);
-    set(ax, 'CLim', clim_by_group(gg, :));
-    title_handles(gg) = title(ax, mode_groups{gg, 2});
-end
-
-for step = 1:max_steps
-    for gg = 1:num_groups
-        if ~valid_groups(gg)
-            set(scatter_handles(gg), 'CData', nan(npoints, 1));
-            set(title_handles(gg), 'String', sprintf('%s | missing', mode_groups{gg, 2}));
+    
+        if frame < t_start || frame > t_end
             continue;
         end
-
-        frames = group_frames{gg};
-        frame = frames(min(step, length(frames)));
-        state = cfd_group_contribution_state(list_modes, list_w, list_b, ...
-            list_t_start, list_bin_widths, npoints, mode_groups{gg, 1}, frame);
-        values = cfd_state_field(state, npoints, field_type);
-
-        set(scatter_handles(gg), 'CData', values);
-        set(axis_handles(gg), 'CLim', clim_by_group(gg, :));
-        set(title_handles(gg), 'String', sprintf('%s | Frame %d/%d-%d', ...
-            mode_groups{gg, 2}, frame, frames(1), frames(end)));
+    
+        rel_time = frame - t_start;
+        amp = list_b{lev, bin}(mode_idx) * list_w{lev, bin}(mode_idx)^rel_time;
+        state = state + real(list_modes{lev, bin}(:, mode_idx) * amp);
     end
-
-    drawnow;
-end
 
 end
 
-function clim_by_group = cfd_group_animation_clim(list_modes, list_w, list_b, ...
-    list_t_start, list_bin_widths, npoints, mode_groups, field_type, group_frames, valid_groups)
 
-num_groups = size(mode_groups, 1);
-clim_by_group = repmat([-1 1], num_groups, 1);
-
-for gg = 1:num_groups
-    if ~valid_groups(gg)
-        continue;
-    end
-
-    max_abs_val = 0;
-    frames = group_frames{gg};
-
-    for kk = 1:length(frames)
-        state = cfd_group_contribution_state(list_modes, list_w, list_b, ...
-            list_t_start, list_bin_widths, npoints, mode_groups{gg, 1}, frames(kk));
-        values = cfd_state_field(state, npoints, field_type);
-        max_abs_val = max(max_abs_val, max(abs(values)));
-    end
-
-    if ~isfinite(max_abs_val) || max_abs_val <= 0
-        max_abs_val = 1;
-    end
-
-    if strcmpi(field_type, 'speed')
-        clim_by_group(gg, :) = [0 max_abs_val];
-    else
-        clim_by_group(gg, :) = [-max_abs_val max_abs_val];
-    end
-end
-
-end
-
-function state = cfd_group_contribution_state(list_modes, list_w, list_b, ...
-    list_t_start, list_bin_widths, npoints, mode_specs, frame)
-
-state = zeros(2*npoints, 1);
-
-for ii = 1:size(mode_specs, 1)
-    lev = mode_specs(ii, 1);
-    bin = mode_specs(ii, 2);
-    mode_idx = mode_specs(ii, 3);
-
-    if ~is_valid_mrdmd_mode(list_modes, list_w, lev, bin, mode_idx)
-        continue;
-    end
-
-    t_start = list_t_start(lev, bin);
-    bin_width = list_bin_widths(lev, bin);
-    t_end = t_start + bin_width - 1;
-
-    if frame < t_start || frame > t_end
-        continue;
-    end
-
-    rel_time = frame - t_start;
-    amp = list_b{lev, bin}(mode_idx) * list_w{lev, bin}(mode_idx)^rel_time;
-    state = state + real(list_modes{lev, bin}(:, mode_idx) * amp);
-end
-
-end
-
+%% MODE EXISTENCE CHECKER
+% Checks whether [level, bin, mode] actually exists before trying to plot 
 function tf = is_valid_mrdmd_mode(list_modes, list_w, lev, bin, mode_idx)
-tf = lev <= size(list_modes, 1) && ...
-     bin <= size(list_modes, 2) && ...
-     ~isempty(list_modes{lev, bin}) && ...
-     mode_idx <= size(list_modes{lev, bin}, 2) && ...
-     mode_idx <= length(list_w{lev, bin});
+    tf = lev <= size(list_modes, 1) && ...
+         bin <= size(list_modes, 2) && ...
+         ~isempty(list_modes{lev, bin}) && ...
+         mode_idx <= size(list_modes{lev, bin}, 2) && ...
+         mode_idx <= length(list_w{lev, bin});
 end
 
+
+%% STATE TO PLOT
+% Converts 'u' to u velocity, 'speed' to sqrt
 function values = cfd_state_field(state, npoints, field_type)
-
-u = real(state(1:npoints));
-v = real(state(npoints+1:2*npoints));
-
-switch lower(field_type)
-    case 'u'
-        values = u;
-    case 'v'
-        values = v;
-    case 'speed'
-        values = sqrt(u.^2 + v.^2);
-    otherwise
-        error('field_type must be ''u'', ''v'', or ''speed''.');
+    u = real(state(1:npoints));
+    v = real(state(npoints+1:2*npoints));
+    
+    switch lower(field_type)
+        case 'u'
+            values = u;
+        case 'v'
+            values = v;
+        case 'speed'
+            values = sqrt(u.^2 + v.^2);
+        otherwise
+            error('field_type must be ''u'', ''v'', or ''speed''.');
+    end
 end
 
-end
 
+%% SPEED CONVERTER
+% Converts [u;v] state to speed, then plots
 function cfd_plot_state_speed(ax, state, x, y, npoints, clim_vals, title_text)
     speed = cfd_speed_from_state(state, npoints);
     cfd_plot_scalar_field(ax, x, y, speed, clim_vals, title_text);
 end
 
+%% PLOTTER 
+% Makes scatter plot over (x,y) using scalar values as color
 function cfd_plot_scalar_field(ax, x, y, values, clim_vals, title_text)
     scatter(ax, x, y, 12, real(values(:)), 'filled');
     axis(ax, 'equal');
@@ -865,6 +879,7 @@ function cfd_plot_scalar_field(ax, x, y, values, clim_vals, title_text)
     set(ax, 'CLim', clim_vals);
 end
 
+%% Speed 
 function speed = cfd_speed_from_state(state, npoints)
     state = real(state(:));
     u = state(1:npoints);
@@ -872,6 +887,8 @@ function speed = cfd_speed_from_state(state, npoints)
     speed = sqrt(u.^2 + v.^2);
 end
 
+
+%% POINTWISE VELOCITY(U,V, SPEED) ERROR CALCULATOR
 function err_speed = cfd_speed_error(state_true, state_pred, npoints)
     state_true = real(state_true(:));
     state_pred = real(state_pred(:));
@@ -880,6 +897,7 @@ function err_speed = cfd_speed_error(state_true, state_pred, npoints)
     err_speed = sqrt(du.^2 + dv.^2);
 end
 
+%% SHARED COLOR LIMIT IDENTIFIER - FOR TRUE VS PREDICTED
 function clim_vals = cfd_speed_clim_pair(A, B, npoints)
     max_val = 0;
     for k = 1:size(A,2)
@@ -894,6 +912,8 @@ function clim_vals = cfd_speed_clim_pair(A, B, npoints)
     clim_vals = [0 max_val];
 end
 
+
+%% FINDS REASONABLE [0, MAX_ERROR] COLOR SCALE FOR L3 ERROR ANIMATION
 function clim_vals = cfd_speed_error_clim(A, B, npoints)
     max_val = 0;
     for k = 1:min(size(A,2), size(B,2))
@@ -905,15 +925,12 @@ function clim_vals = cfd_speed_error_clim(A, B, npoints)
     clim_vals = [0 max_val];
 end
 
+
+%% DMD FUNCTION
 function [modes, D, b] = dmd(X)
     X1 = X(:, 1:end-1);
     Y = X(:, 2:end);
     [U, S, V] = svds(X1, 25);
-    %{
-    thresh = 1e-8 * sing_vals(1);
-    r = sum(sing_vals > thresh);
-    r = min([25, r, size(U, 2)]); 
-    %}
     r = 25;
     if r == 0, r = 1; end
     U = U(:, 1:r);
@@ -926,6 +943,15 @@ function [modes, D, b] = dmd(X)
     modes = single(Y * V * (S \ W));
     b = single(pinv(modes) * X1(:, 1)); 
 end
+
+%% FUNCTION FOR RUNNING WSINDY
+% Builds modal amplitude timeseries (xobs) from stored DMD modes
+% Keeps only modes in selected interval 
+% Ranks and only keeps mode based on RMS Energy
+% Keeps TOP INPUT MODES from L1/L2 and TOP TARGET MODES from L3
+% First pass WSINDY - gets relevant modes - computes more detailed library
+% with those modes - runs Second pass WSINDY
+% Caps large coefficients, caps self-growth, prunes weak/excess terms
 
 function [w_linear, w_second, labels_second, tags, xobs, tobs, mode_labels, target_cols, mu_xobs, sigma_xobs] = run_mrdmd_wsindy(...
     list_w, list_b, list_modes, list_t_start, list_bin_widths, ...
@@ -1180,13 +1206,6 @@ function [w_linear, w_second, labels_second, tags, xobs, tobs, mode_labels, targ
         end
 
         self_idx = find(strcmp(labels2, mode_labels{target_col}), 1);
-        %{
-        if ~isempty(self_idx) && coef2(self_idx) > 0
-            fprintf('Removing positive self-feedback for %s: %.4e -> 0\n', ...
-                mode_labels{target_col}, coef2(self_idx));
-            coef2(self_idx) = 0;
-        end
-        %}
         self_growth_cap = 0.02;
 
         if ~isempty(self_idx) && coef2(self_idx) > self_growth_cap
@@ -1204,6 +1223,8 @@ function [w_linear, w_second, labels_second, tags, xobs, tobs, mode_labels, targ
     
 end
 
+
+%% Propagating Function for L3 modes
 function dydt = mrdmd_wsindy_inside_rhs(tt, y, w_second, labels_second, ...
     mode_labels, target_cols, xobs, tobs)
 
@@ -1225,7 +1246,9 @@ function dydt = mrdmd_wsindy_inside_rhs(tt, y, w_second, labels_second, ...
     end
 end
 
-
+%% Equation Term Evaluator
+% Turns labels like '(L2 B2 Mode11)^2' into actual numerical values
+% Handles self quadratics and cross terms for now
 function val = evaluate_inside_label(label, tt, y, mode_labels, target_cols, xobs, tobs)
 
     % self quadratic
@@ -1269,94 +1292,99 @@ function val = evaluate_inside_label(label, tt, y, mode_labels, target_cols, xob
 end
 
 
+%% Label Parser 
+% Turns something like 'L3 B4 Mode14' into lev = 3, bin = 4, mode_idx = 14;
 function [lev, bin, mode_idx] = parse_mode_label(label)
-nums = sscanf(label, 'L%d B%d Mode%d');
-
-lev = nums(1);
-bin = nums(2);
-mode_idx = nums(3);
-end
-
-function coef = prune_equation_terms(coef, labels, target_label, relative_tol, max_terms, max_nonlinear_terms)
-if isempty(coef) || all(coef == 0)
-    return;
-end
-
-abs_coef = abs(coef);
-max_coef = max(abs_coef);
-
-if max_coef == 0
-    return;
-end
-
-small_terms = abs_coef < relative_tol * max_coef;
-coef(small_terms) = 0;
-
-nonlinear = false(size(coef));
-for ii = 1:length(labels)
-    nonlinear(ii) = contains(labels{ii}, '^2') || contains(labels{ii}, ')*(');
-end
-
-active_nonlinear = find(coef ~= 0 & nonlinear);
-if length(active_nonlinear) > max_nonlinear_terms
-    [~, ord] = sort(abs(coef(active_nonlinear)), 'descend');
-    drop_idx = active_nonlinear(ord(max_nonlinear_terms+1:end));
-    coef(drop_idx) = 0;
-end
-
-active = find(coef ~= 0);
-if length(active) > max_terms
-    [~, ord] = sort(abs(coef(active)), 'descend');
-    keep = active(ord(1:max_terms));
-
-    target_self = find(strcmp(labels, target_label), 1);
-    if ~isempty(target_self) && coef(target_self) ~= 0 && ~ismember(target_self, keep)
-        weakest_keep = keep(end);
-        keep(end) = target_self;
-        fprintf('Keeping target self term for %s; dropping weaker term %.4e.\n', ...
-            target_label, coef(weakest_keep));
+    nums = sscanf(label, 'L%d B%d Mode%d');
+    
+    lev = nums(1);
+    bin = nums(2);
+    mode_idx = nums(3);
     end
-
-    drop = setdiff(active, keep);
-    coef(drop) = 0;
+    
+    function coef = prune_equation_terms(coef, labels, target_label, relative_tol, max_terms, max_nonlinear_terms)
+    if isempty(coef) || all(coef == 0)
+        return;
+    end
+    
+    abs_coef = abs(coef);
+    max_coef = max(abs_coef);
+    
+    if max_coef == 0
+        return;
+    end
+    
+    small_terms = abs_coef < relative_tol * max_coef;
+    coef(small_terms) = 0;
+    
+    nonlinear = false(size(coef));
+    for ii = 1:length(labels)
+        nonlinear(ii) = contains(labels{ii}, '^2') || contains(labels{ii}, ')*(');
+    end
+    
+    active_nonlinear = find(coef ~= 0 & nonlinear);
+    if length(active_nonlinear) > max_nonlinear_terms
+        [~, ord] = sort(abs(coef(active_nonlinear)), 'descend');
+        drop_idx = active_nonlinear(ord(max_nonlinear_terms+1:end));
+        coef(drop_idx) = 0;
+    end
+    
+    active = find(coef ~= 0);
+    if length(active) > max_terms
+        [~, ord] = sort(abs(coef(active)), 'descend');
+        keep = active(ord(1:max_terms));
+    
+        target_self = find(strcmp(labels, target_label), 1);
+        if ~isempty(target_self) && coef(target_self) ~= 0 && ~ismember(target_self, keep)
+            weakest_keep = keep(end);
+            keep(end) = target_self;
+            fprintf('Keeping target self term for %s; dropping weaker term %.4e.\n', ...
+                target_label, coef(weakest_keep));
+        end
+    
+        drop = setdiff(active, keep);
+        coef(drop) = 0;
+    end
 end
-end
 
+
+%% MRDMD Modal Time Builder 
+% Builds based on b * lambda^t
 function [xobs, tobs] = build_mrdmd_xobs_for_labels( ...
     list_w, list_b, list_t_start, list_bin_widths, ...
     dt, m, mode_labels, start_idx, end_idx)
 
-m_interval = end_idx - start_idx + 1;
-xobs = zeros(m_interval, length(mode_labels));
-
-for c = 1:length(mode_labels)
-
-    [lev, bin, mode_idx] = parse_mode_label(mode_labels{c});
-
-    eigs_slow = list_w{lev, bin};
-    b = list_b{lev, bin};
-    bin_width = list_bin_widths(lev, bin);
-    t_start = list_t_start(lev, bin);
-    t_end = t_start + bin_width - 1;
-
-    if start_idx > t_end || end_idx < t_start
-        continue;
+    m_interval = end_idx - start_idx + 1;
+    xobs = zeros(m_interval, length(mode_labels));
+    
+    for c = 1:length(mode_labels)
+    
+        [lev, bin, mode_idx] = parse_mode_label(mode_labels{c});
+    
+        eigs_slow = list_w{lev, bin};
+        b = list_b{lev, bin};
+        bin_width = list_bin_widths(lev, bin);
+        t_start = list_t_start(lev, bin);
+        t_end = t_start + bin_width - 1;
+    
+        if start_idx > t_end || end_idx < t_start
+            continue;
+        end
+    
+        local_start = max(start_idx, t_start);
+        local_end   = min(end_idx, t_end);
+    
+        rel_start = local_start - t_start;
+        rel_end   = local_end - t_start;
+    
+        insert_start = local_start - start_idx + 1;
+        insert_end   = local_end - start_idx + 1;
+    
+        a_local = b(mode_idx) * eigs_slow(mode_idx).^(rel_start:rel_end);
+        xobs(insert_start:insert_end, c) = real(a_local(:));
     end
-
-    local_start = max(start_idx, t_start);
-    local_end   = min(end_idx, t_end);
-
-    rel_start = local_start - t_start;
-    rel_end   = local_end - t_start;
-
-    insert_start = local_start - start_idx + 1;
-    insert_end   = local_end - start_idx + 1;
-
-    a_local = b(mode_idx) * eigs_slow(mode_idx).^(rel_start:rel_end);
-    xobs(insert_start:insert_end, c) = real(a_local(:));
-end
-
-tobs = (0:m_interval-1)' * dt;
-end
+    
+    tobs = (0:m_interval-1)' * dt;
+    end
 
 
